@@ -20,3 +20,7 @@ Connect your 4D Systems display to your PC using the 4D Systems Programming Cabl
 Load the calculator ViSi-Genie application onto the display as per any other ViSi-Genie application.
 Please refer to the 4D Systems website, namingly the Workshop 4 Product Page, and read about ViSi-Genie from the documentation provided.
 Connect the 4D Systems display to your Arduino, and reset the Arduino. The calculator demo should now run.
+
+## Video
+
+Please watch the video of this demo in action, on Youtube: http://www.youtube.com/watch?v=KFdDmTqGhK4
