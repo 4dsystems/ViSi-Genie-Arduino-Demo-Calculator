@@ -1,6 +1,6 @@
 /*
- * calculator.pde:
- *      Gordon Henderson, February 2013, <projects@drogon.net>
+ * calculator.ino:
+ *      Original Version by Gordon Henderson, February 2013, <projects@drogon.net>
  *      Copyright (c) 2012-2013 4D Systems PTY Ltd, Sydney, Australia
  ***********************************************************************
  * This file is part of genieArduino:
@@ -19,8 +19,11 @@
  *    If not, see <http://www.gnu.org/licenses/>.
  ***********************************************************************
  */
+ 
+ // This demo is a calculator. Display interface talks to the Arduino, and arduino does
+ // all the calculations. Uses Serial0 to talk to the Display.
 
-#include <genieArduino.h>
+#include <genieArduino.h>  // MODIFIED new genieArduino library
 
 #include <stdio.h>
 #include <stdint.h>
@@ -39,6 +42,40 @@ double memory ;
 double display = 0.0 ;
 int    lastOperator ;
 int    errorCondition  ;
+
+
+/*
+ *********************************************************************************
+ * main:
+ *	Run our little demo
+ *********************************************************************************
+ */
+
+void setup ()
+{
+  pinMode      (13, OUTPUT); // For debug purposes, LED on D13 is set if something 'wrong' happens
+  digitalWrite (13, 0);      // Turn off LED to start with
+  genieBegin (GENIE_SERIAL, 115200);  //Serial0 for the display
+  
+  genieAttachEventHandler(handleGenieEvent); // Attach the function handleGenieEvent() to the library, which is called by the library
+  
+  delay(3000);	// Let display settle
+  
+  genieWriteObject (GENIE_OBJ_FORM, 0, 0); // Select form 0 (the calculator)
+
+  calculatorKey ('a') ;	// Clear the calculator
+}
+
+
+void loop (void)
+{
+  // Big loop - just wait for events from the display now
+  
+  genieDoEvents();
+
+  // Do other things here if required
+}
+
 
 
 /*
@@ -247,56 +284,32 @@ void calculatorKey (int key)
  *********************************************************************************
  */
 
-void handleGenieEvent (struct genieReplyStruct *reply)
+void handleGenieEvent (void)
 {
-  if (reply->cmd != GENIE_REPORT_EVENT)
+  int keyboardValue;
+  
+  genieFrame reply;
+  genieDequeueEvent(&reply); // Remove this event from the queue
+  
+  if (reply.reportObject.cmd != GENIE_REPORT_EVENT) // If this event is NOT a Reported Message 
   {
-    digitalWrite (13, 1) ;
+    digitalWrite (13, 1); // Set the LED to show a different message has been received (invalid to this demo)
     return ;
   }
 
-  /**/ if (reply->object == GENIE_OBJ_KEYBOARD)
+  if (reply.reportObject.object == GENIE_OBJ_KEYBOARD) // If this event is from a Keyboard
   {
-    if (reply->index == 0)	// Only one keyboard
-      calculatorKey (reply->data) ;
+    if (reply.reportObject.index == 0)	// If from Keyboard0
+    {  
+      keyboardValue = genieGetEventData(&reply); // Get data from Keyboard0
+      calculatorKey (keyboardValue); // pass data to the calculatorKey function for processing
+    }
     else
-      digitalWrite (13, 1) ;
+      digitalWrite (13, 1) ; // If this event is from a different keyboard, set LED as its invalid for this demo
   }
   else
-    digitalWrite (13, 1) ;
+    digitalWrite (13, 1); // If this event is from a different object, set LED as its invalid for this demo
 }
 
 
-/*
- *********************************************************************************
- * main:
- *	Run our little demo
- *********************************************************************************
- */
 
-void setup ()
-{
-  pinMode      (13, OUTPUT) ;
-  digitalWrite (13, 0) ;
-  genieSetup   (115200) ;
-}
-
-
-void loop (void)
-{
-  struct genieReplyStruct reply ;
-
-// Select form 0 (the calculator)
-
-  genieWriteObj (GENIE_OBJ_FORM, 0, 0) ;
-
-  calculatorKey ('a') ;	// Clear the calculator
-
-// Big loop - just wait for events from the display now
-
-  for (;;)
-  {
-    genieGetReply    (&reply) ;
-    handleGenieEvent (&reply) ;
-  }
-}
