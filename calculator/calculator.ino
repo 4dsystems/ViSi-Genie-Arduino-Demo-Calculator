@@ -2,6 +2,7 @@
  * calculator.ino:
  *      Original Version by Gordon Henderson, February 2013, <projects@drogon.net>
  *      Copyright (c) 2012-2013 4D Systems PTY Ltd, Sydney, Australia
+ *      Updated March 2014 by 4D Systems Pty Ltd
  ***********************************************************************
  * This file is part of genieArduino:
  *    genieArduino is free software: you can redistribute it and/or modify
@@ -19,9 +20,9 @@
  *    If not, see <http://www.gnu.org/licenses/>.
  ***********************************************************************
  */
- 
- // This demo is a calculator. Display interface talks to the Arduino, and arduino does
- // all the calculations. Uses Serial0 to talk to the Display.
+
+// This demo is a calculator. Display interface talks to the Arduino, and arduino does
+// all the calculations. Uses Serial0 to talk to the Display.
 
 #include <genieArduino.h>  // MODIFIED new genieArduino library
 
@@ -34,7 +35,6 @@
 #define	FALSE	(!TRUE)
 #endif
 
-
 // Calculator globals
 
 double acc ;
@@ -43,6 +43,8 @@ double display = 0.0 ;
 int    lastOperator ;
 int    errorCondition  ;
 
+Genie genie;
+#define RESETLINE 4  // Change this if you are not using an Arduino Adaptor Shield Version 2 (see code below)
 
 /*
  *********************************************************************************
@@ -55,28 +57,35 @@ void setup ()
 {
   pinMode      (13, OUTPUT); // For debug purposes, LED on D13 is set if something 'wrong' happens
   digitalWrite (13, 0);      // Turn off LED to start with
-  genieBegin (GENIE_SERIAL, 115200);  //Serial0 for the display
-  
-  genieAttachEventHandler(handleGenieEvent); // Attach the function handleGenieEvent() to the library, which is called by the library
-  
-  delay(3000);	// Let display settle
-  
-  genieWriteObject (GENIE_OBJ_FORM, 0, 0); // Select form 0 (the calculator)
+
+  Serial.begin(115200);  // Serial0 @ 115200 Baud
+  genie.Begin(Serial);   // Use Serial0 for talking to the Genie Library, and to the 4D Systems display
+
+  genie.AttachEventHandler(myGenieEventHandler); // Attach the user function Event Handler for processing events
+
+  // Reset the Display (change D4 to D2 if you have original 4D Arduino Adaptor)
+  // If NOT using a 4D Arduino Adaptor, digitalWrites must be reversed as Display Reset is Active Low, and
+  // the 4D Arduino Adaptors invert this signal so must be Active High.
+  pinMode(RESETLINE, OUTPUT);  // Set D4 on Arduino to Output (4D Arduino Adaptor V2 - Display Reset)
+  digitalWrite(RESETLINE, 1);  // Reset the Display via D4
+  delay(100);
+  digitalWrite(RESETLINE, 0);  // unReset the Display via D4
+
+  delay (3500); //let the display start up after the reset (This is important)
+
+  genie.WriteObject (GENIE_OBJ_FORM, 0, 0); // Select form 0 (the calculator)
 
   calculatorKey ('a') ;	// Clear the calculator
 }
 
-
 void loop (void)
 {
   // Big loop - just wait for events from the display now
-  
-  genieDoEvents();
+
+  genie.DoEvents();
 
   // Do other things here if required
 }
-
-
 
 /*
  * updateDisplay:
@@ -84,7 +93,7 @@ void loop (void)
  *********************************************************************************
  */
 
-void updateDisplay (void)
+void updateDisplay(void)
 {
   char *p ;
   char buf [32] ;
@@ -94,13 +103,13 @@ void updateDisplay (void)
   else
     dtostrf (display, 11, 5, buf) ;
 
-  genieWriteStr (0, buf) ;	// Text box number 0
+  genie.WriteStr (0, buf) ;	// Text box number 0
 
   sprintf (buf, "%c %c",
-	memory != 0.0 ? 'M' : ' ',
-	lastOperator == 0 ? ' ' : lastOperator) ;
+           memory != 0.0 ? 'M' : ' ',
+           lastOperator == 0 ? ' ' : lastOperator) ;
 
-  genieWriteStr (1, buf) ;	// Text box number 1
+  genie.WriteStr (1, buf) ;	// Text box number 1
 }
 
 
@@ -110,7 +119,7 @@ void updateDisplay (void)
  *********************************************************************************
  */
 
-static void processOperator (int opsKey)
+static void processOperator(int opsKey)
 {
   /**/ if (opsKey == '+')
     acc += display ;
@@ -140,19 +149,19 @@ static void processOperator (int opsKey)
  *********************************************************************************
  */
 
-void calculatorKey (int key)
+void calculatorKey(int key)
 {
   static int gotDecimal     = FALSE ;
   static int startNewNumber = TRUE ;
   static double multiplier  = 1.0 ;
   float digit ;
 
-// Eeeeee...
+  // Eeeeee...
 
   if (errorCondition && key != 'a')
     return ;
 
-  if (isdigit (key))
+  if (isdigit(key))
   {
     if (startNewNumber)
     {
@@ -187,16 +196,16 @@ void calculatorKey (int key)
 
     case 'c':			// Clear entry or operator
       if (lastOperator != 0)
-	lastOperator = 0 ;
+        lastOperator = 0 ;
       else
       {
-	display        = 0.0 ;
-	gotDecimal     = FALSE ;
-	startNewNumber = TRUE ;
+        display        = 0.0 ;
+        gotDecimal     = FALSE ;
+        startNewNumber = TRUE ;
       }
       break ;
 
-// Memory keys
+      // Memory keys
 
     case 128:		// Mem Store
       memory = display ;
@@ -218,7 +227,7 @@ void calculatorKey (int key)
       memory = 0.0 ;
       break ;
 
-// Other functions
+      // Other functions
 
     case 140:		// +/-
       display = -display ;
@@ -226,22 +235,22 @@ void calculatorKey (int key)
 
     case 's':	// Square root
       if (display < 0.0)
-	errorCondition = TRUE ;
+        errorCondition = TRUE ;
       else
       {
-	display        = sqrt (display) ;
-	gotDecimal     = FALSE ;
-	startNewNumber = TRUE ;
+        display        = sqrt (display) ;
+        gotDecimal     = FALSE ;
+        startNewNumber = TRUE ;
       }
       break ;
 
-// Operators
+      // Operators
 
     case '+': case '-': case '*': case '/':
       if (lastOperator == 0)
-	acc = display ;
+        acc = display ;
       else
-	processOperator (lastOperator) ;
+        processOperator (lastOperator) ;
       lastOperator    = key ;
       startNewNumber = TRUE ;
       gotDecimal     = FALSE ;
@@ -249,7 +258,7 @@ void calculatorKey (int key)
 
     case '=':
       if (lastOperator != 0)
-	processOperator (lastOperator) ;
+        processOperator (lastOperator) ;
       lastOperator    = 0 ;
       gotDecimal     = FALSE ;
       startNewNumber = TRUE ;
@@ -259,14 +268,14 @@ void calculatorKey (int key)
     case '.':
       if (!gotDecimal)
       {
-	if (startNewNumber)
-	{
-	  startNewNumber = FALSE ;
-	  display        = 0.0 ;
-	}
-	multiplier = 0.1 ;
-	gotDecimal = TRUE ;
-	break ;
+        if (startNewNumber)
+        {
+          startNewNumber = FALSE ;
+          display        = 0.0 ;
+        }
+        multiplier = 0.1 ;
+        gotDecimal = TRUE ;
+        break ;
       }
 
     default:
@@ -274,35 +283,35 @@ void calculatorKey (int key)
       break ;
   }
 
-  updateDisplay () ;
+  updateDisplay() ;
 }
 
 
 /*
- * handleGenieEvent:
+ * myGenieEventHandler:
  *	Take a reply off the display and call the appropriate handler for it.
  *********************************************************************************
  */
 
-void handleGenieEvent (void)
+void myGenieEventHandler (void)
 {
   int keyboardValue;
-  
-  genieFrame reply;
-  genieDequeueEvent(&reply); // Remove this event from the queue
-  
-  if (reply.reportObject.cmd != GENIE_REPORT_EVENT) // If this event is NOT a Reported Message 
+
+  genieFrame Event;
+  genie.DequeueEvent(&Event); // Remove this event from the queue
+
+  if (Event.reportObject.cmd != GENIE_REPORT_EVENT) // If this event is NOT a Reported Message
   {
     digitalWrite (13, 1); // Set the LED to show a different message has been received (invalid to this demo)
-    return ;
+    return ; // Leave the handler
   }
 
-  if (reply.reportObject.object == GENIE_OBJ_KEYBOARD) // If this event is from a Keyboard
+  if (Event.reportObject.object == GENIE_OBJ_KEYBOARD) // If this event is from a Keyboard
   {
-    if (reply.reportObject.index == 0)	// If from Keyboard0
-    {  
-      keyboardValue = genieGetEventData(&reply); // Get data from Keyboard0
-      calculatorKey (keyboardValue); // pass data to the calculatorKey function for processing
+    if (Event.reportObject.index == 0)	// If from Keyboard0
+    {
+      keyboardValue = genie.GetEventData(&Event); // Get data from Keyboard0
+      calculatorKey(keyboardValue); // pass data to the calculatorKey function for processing
     }
     else
       digitalWrite (13, 1) ; // If this event is from a different keyboard, set LED as its invalid for this demo
@@ -310,6 +319,4 @@ void handleGenieEvent (void)
   else
     digitalWrite (13, 1); // If this event is from a different object, set LED as its invalid for this demo
 }
-
-
 
